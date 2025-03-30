@@ -1,3 +1,5 @@
+## Description: Enables Object Detection and Camera
+## Source: EJ Technology (https://www.youtube.com/watch?v=r0RspiLG260)
 import os
 import sys
 import argparse
