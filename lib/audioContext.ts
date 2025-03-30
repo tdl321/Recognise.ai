@@ -1,0 +1,137 @@
+import { useState, useEffect } from 'react';
+import useSound from 'use-sound';
+
+// Default sound paths
+const CORRECT_SOUND_PATH = '/sounds/correct.mp3';
+const INCORRECT_SOUND_PATH = '/sounds/incorrect.mp3';
+const WARNING_SOUND_PATH = '/sounds/warning.mp3';
+
+// Default sound settings
+const DEFAULT_VOLUME = 0.7;
+const DEFAULT_ENABLED = true;
+
+// LocalStorage keys
+const VOLUME_STORAGE_KEY = 'waste-detection-volume';
+const SOUND_ENABLED_KEY = 'waste-detection-sound-enabled';
+const SOUND_CHOICE_KEY = 'waste-detection-sound-choice';
+
+export type SoundType = 'correct' | 'incorrect' | 'warning';
+export type SoundChoice = 'bell' | 'chime' | 'alert' | 'notification' | 'funny' | 'custom';
+
+interface SoundSettings {
+  enabled: boolean;
+  volume: number;
+  choice: SoundChoice;
+}
+
+// Helper to get settings from localStorage
+const getSavedSettings = (): SoundSettings => {
+  if (typeof window === 'undefined') {
+    return {
+      enabled: DEFAULT_ENABLED,
+      volume: DEFAULT_VOLUME,
+      choice: 'bell' as SoundChoice,
+    };
+  }
+
+  return {
+    enabled: localStorage.getItem(SOUND_ENABLED_KEY) === 'false' ? false : DEFAULT_ENABLED,
+    volume: parseFloat(localStorage.getItem(VOLUME_STORAGE_KEY) || DEFAULT_VOLUME.toString()),
+    choice: (localStorage.getItem(SOUND_CHOICE_KEY) || 'bell') as SoundChoice,
+  };
+};
+
+// Helper to save settings to localStorage
+const saveSettings = (settings: SoundSettings) => {
+  if (typeof window === 'undefined') return;
+  
+  localStorage.setItem(SOUND_ENABLED_KEY, settings.enabled.toString());
+  localStorage.setItem(VOLUME_STORAGE_KEY, settings.volume.toString());
+  localStorage.setItem(SOUND_CHOICE_KEY, settings.choice);
+};
+
+export const useAudioContext = () => {
+  const [settings, setSettings] = useState<SoundSettings>(getSavedSettings());
+  
+  // Get the correct sound path based on the sound choice
+  const getSoundPath = (type: SoundType): string => {
+    // Special case for funny sounds
+    if (settings.choice === 'funny') {
+      switch (type) {
+        case 'correct':
+          return '/sounds/funny/tada.mp3';
+        case 'incorrect':
+          return '/sounds/funny/cartoon_fail.mp3';
+        case 'warning':
+          return '/sounds/funny/wilhelm_scream.mp3';
+        default:
+          return '/sounds/funny/funny_alert.mp3';
+      }
+    }
+    
+    // Regular sound categories
+    const basePath = `/sounds/${settings.choice}`;
+    
+    switch (type) {
+      case 'correct':
+        return `${basePath}_correct.mp3`;
+      case 'incorrect':
+        return `${basePath}_incorrect.mp3`;
+      case 'warning':
+        return `${basePath}_warning.mp3`;
+      default:
+        return INCORRECT_SOUND_PATH;
+    }
+  };
+  
+  // Initialize sound hooks
+  const [playCorrect] = useSound(getSoundPath('correct'), { 
+    volume: settings.volume,
+    soundEnabled: settings.enabled,
+  });
+  
+  const [playIncorrect] = useSound(getSoundPath('incorrect'), { 
+    volume: settings.volume,
+    soundEnabled: settings.enabled,
+  });
+  
+  const [playWarning] = useSound(getSoundPath('warning'), { 
+    volume: settings.volume,
+    soundEnabled: settings.enabled,
+  });
+  
+  // Update settings and save to localStorage
+  const updateSettings = (newSettings: Partial<SoundSettings>) => {
+    const updatedSettings = { ...settings, ...newSettings };
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
+  };
+  
+  // Play a sound based on type
+  const playSound = (type: SoundType) => {
+    if (!settings.enabled) return;
+    
+    switch (type) {
+      case 'correct':
+        playCorrect();
+        break;
+      case 'incorrect':
+        playIncorrect();
+        break;
+      case 'warning':
+        playWarning();
+        break;
+    }
+  };
+  
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    setSettings(getSavedSettings());
+  }, []);
+  
+  return {
+    settings,
+    updateSettings,
+    playSound,
+  };
+}; 

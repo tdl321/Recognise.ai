@@ -22,6 +22,10 @@ export default function AlarmsPage() {
   const [customAlarms, setCustomAlarms] = useState([
     { id: "alarm1", name: "Fire Alarm", file: null },
     { id: "alarm2", name: "School Bell", file: null },
+    { id: "alarm3", name: "Cartoon Fail", file: null, path: "/sounds/funny/cartoon_fail.mp3" },
+    { id: "alarm4", name: "Wilhelm Scream", file: null, path: "/sounds/funny/wilhelm_scream.mp3" },
+    { id: "alarm5", name: "Tada", file: null, path: "/sounds/funny/tada.mp3" },
+    { id: "alarm6", name: "Funny Alert", file: null, path: "/sounds/funny/funny_alert.mp3" },
   ])
 
   const handlePlaySound = () => {
@@ -77,8 +81,13 @@ export default function AlarmsPage() {
                       <Music className="h-4 w-4" />
                       <span className="font-medium">{alarm.name}</span>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500">
-                      <Trash2 className="h-4 w-4" />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 w-8"
+                      onClick={() => handlePlaySound()}
+                    >
+                      <Play className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}

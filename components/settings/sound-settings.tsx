@@ -63,6 +63,7 @@ export function SoundSettings({ className = "", showCard = true }: SoundSettings
             <SelectItem value="chime">Chime</SelectItem>
             <SelectItem value="alert">Alert</SelectItem>
             <SelectItem value="notification">Notification</SelectItem>
+            <SelectItem value="funny">Funny Sounds</SelectItem>
           </SelectContent>
         </Select>
       </div>
