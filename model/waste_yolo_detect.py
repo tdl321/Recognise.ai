@@ -1,3 +1,7 @@
+*/
+*  Description: Enables Object Detection on Camera and Activates the camera
+*  Code sourced from ejtech.io
+*/
 import os
 import sys
 import argparse
