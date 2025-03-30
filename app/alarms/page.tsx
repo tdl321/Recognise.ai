@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { BellRing, Volume2, Play, Pause, Upload, Trash2, Save, Music, AlertTriangle } from "lucide-react"
+import { SoundSettings } from "@/components/settings/sound-settings"
 
 export default function AlarmsPage() {
   const [alarmEnabled, setAlarmEnabled] = useState(true)
@@ -47,85 +48,11 @@ export default function AlarmsPage() {
         <div className="space-y-6 flex flex-col">
           <Card className="flex-1">
             <CardHeader>
-              <CardTitle>Alarm Configuration</CardTitle>
-              <CardDescription>Set up alerts for incorrect disposals</CardDescription>
+              <CardTitle>Audio Alert Configuration</CardTitle>
+              <CardDescription>Configure sound alerts for detections</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="alarm-enabled">Enable Alarms</Label>
-                  <p className="text-sm text-muted-foreground">Trigger alerts when incorrect disposals are detected</p>
-                </div>
-                <Switch id="alarm-enabled" checked={alarmEnabled} onCheckedChange={setAlarmEnabled} />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="alarm-type">Alarm Sound</Label>
-                <Select value={alarmType} onValueChange={setAlarmType}>
-                  <SelectTrigger id="alarm-type">
-                    <SelectValue placeholder="Select alarm sound" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bell">Bell</SelectItem>
-                    <SelectItem value="siren">Siren</SelectItem>
-                    <SelectItem value="alert">Alert</SelectItem>
-                    <SelectItem value="notification">Notification</SelectItem>
-                    <SelectItem value="custom">Custom Sound</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="volume">Volume</Label>
-                  <span className="text-sm">{volume}%</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Volume2 className="h-4 w-4 text-muted-foreground" />
-                  <Slider
-                    id="volume"
-                    value={[volume]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={(value) => setVolume(value[0])}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="duration">Duration (seconds)</Label>
-                  <span className="text-sm">{duration}s</span>
-                </div>
-                <Slider
-                  id="duration"
-                  value={[duration]}
-                  min={1}
-                  max={10}
-                  step={1}
-                  onValueChange={(value) => setDuration(value[0])}
-                />
-              </div>
-
-              <Button
-                onClick={handlePlaySound}
-                className="w-full bg-[#8cb9a3] hover:bg-[#7aa08a]"
-                disabled={!alarmEnabled}
-              >
-                {isPlaying ? (
-                  <>
-                    <Pause className="h-4 w-4 mr-2" />
-                    <span>Playing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    <span>Test Alarm</span>
-                  </>
-                )}
-              </Button>
+            <CardContent>
+              <SoundSettings showCard={false} />
             </CardContent>
           </Card>
 
@@ -150,14 +77,9 @@ export default function AlarmsPage() {
                       <Music className="h-4 w-4" />
                       <span className="font-medium">{alarm.name}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>

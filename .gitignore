@@ -31,6 +31,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Node.js
 node_modules/
@@ -71,4 +75,7 @@ logs/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db
+
+# Cursor
+.cursor/ 

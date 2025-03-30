@@ -9,10 +9,23 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Save, RefreshCw, Clock, Database, Shield, Monitor, Upload, Trash2 } from "lucide-react"
+import { Save, RefreshCw, Clock, Database, Shield, Monitor, Upload, Trash2, AlertCircle } from "lucide-react"
+import { seedDatabase, clearDatabase } from "@/lib/seedDatabase"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert/index"
+import { SoundSettings } from "@/components/settings/sound-settings"
 
 export default function SettingsPage() {
   const [saveStatus, setSaveStatus] = useState<null | "saving" | "success" | "error">(null)
+  const [dbStatus, setDbStatus] = useState<{
+    operation: null | "seeding" | "clearing";
+    status: null | "in-progress" | "success" | "error";
+    message: string;
+  }>({
+    operation: null,
+    status: null,
+    message: ""
+  })
+  const [seedCount, setSeedCount] = useState(100)
 
   const handleSave = () => {
     setSaveStatus("saving")
@@ -20,6 +33,76 @@ export default function SettingsPage() {
       setSaveStatus("success")
       setTimeout(() => setSaveStatus(null), 2000)
     }, 1500)
+  }
+
+  const handleSeedDatabase = async () => {
+    setDbStatus({
+      operation: "seeding",
+      status: "in-progress",
+      message: "Seeding database with mock data..."
+    })
+
+    try {
+      const result = await seedDatabase(seedCount)
+      
+      setDbStatus({
+        operation: "seeding",
+        status: result.success ? "success" : "error",
+        message: result.message
+      })
+      
+      // Clear status after 5 seconds
+      setTimeout(() => {
+        setDbStatus({
+          operation: null,
+          status: null,
+          message: ""
+        })
+      }, 5000)
+    } catch (error) {
+      setDbStatus({
+        operation: "seeding",
+        status: "error",
+        message: `Error: ${error instanceof Error ? error.message : String(error)}`
+      })
+    }
+  }
+
+  const handleClearDatabase = async () => {
+    if (!confirm("Are you sure you want to clear all detection data? This cannot be undone.")) {
+      return
+    }
+    
+    setDbStatus({
+      operation: "clearing",
+      status: "in-progress",
+      message: "Clearing database..."
+    })
+
+    try {
+      const result = await clearDatabase()
+      
+      setDbStatus({
+        operation: "clearing",
+        status: result.success ? "success" : "error",
+        message: result.message
+      })
+      
+      // Clear status after 5 seconds
+      setTimeout(() => {
+        setDbStatus({
+          operation: null,
+          status: null,
+          message: ""
+        })
+      }, 5000)
+    } catch (error) {
+      setDbStatus({
+        operation: "clearing",
+        status: "error",
+        message: `Error: ${error instanceof Error ? error.message : String(error)}`
+      })
+    }
   }
 
   return (
@@ -51,6 +134,19 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+        {dbStatus.status && (
+          <Alert variant={dbStatus.status === "error" ? "destructive" : dbStatus.status === "success" ? "default" : "outline"}>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>
+              {dbStatus.operation === "seeding" 
+                ? (dbStatus.status === "in-progress" ? "Seeding Database" : dbStatus.status === "success" ? "Seeding Complete" : "Seeding Error")
+                : (dbStatus.status === "in-progress" ? "Clearing Database" : dbStatus.status === "success" ? "Database Cleared" : "Clearing Error")
+              }
+            </AlertTitle>
+            <AlertDescription>{dbStatus.message}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -154,116 +250,109 @@ export default function SettingsPage() {
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="detection-frequency">Detection Frequency</Label>
-                  <span className="text-sm font-medium">2 fps</span>
+                  <Label htmlFor="detection-interval">Detection Interval</Label>
+                  <span className="text-sm font-medium">2s</span>
                 </div>
                 <Slider
-                  id="detection-frequency"
+                  id="detection-interval"
                   defaultValue={[2]}
-                  min={1}
-                  max={10}
-                  step={1}
+                  min={0.5}
+                  max={5}
+                  step={0.5}
                 />
-                <p className="text-xs text-muted-foreground">Detections per second. Lower values improve performance</p>
+                <p className="text-xs text-muted-foreground">Time between detection runs in seconds</p>
               </div>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="use-gpu">Use GPU Acceleration</Label>
-                  <Switch id="use-gpu" defaultChecked />
+                  <Label htmlFor="auto-detect">Auto Start Detection</Label>
+                  <Switch id="auto-detect" defaultChecked />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Preferences</CardTitle>
-              <CardDescription>Configure application behavior</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto-start Detection</Label>
-                  <p className="text-sm text-muted-foreground">Start detection when app launches</p>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="show-debug">Show Debug Information</Label>
+                  <Switch id="show-debug" />
                 </div>
-                <Switch defaultChecked />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Dark Mode</Label>
-                  <p className="text-sm text-muted-foreground">Use dark color theme</p>
-                </div>
-                <Switch />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Save Detection Images</Label>
-                  <p className="text-sm text-muted-foreground">Save images of detected items</p>
-                </div>
-                <Switch />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Analytics Sharing</Label>
-                  <p className="text-sm text-muted-foreground">Share anonymous usage data</p>
-                </div>
-                <Switch defaultChecked />
               </div>
             </CardContent>
           </Card>
           
+          <SoundSettings />
+          
           <Card>
             <CardHeader>
-              <CardTitle>Data Management</CardTitle>
-              <CardDescription>Manage detection data and database</CardDescription>
+              <CardTitle>Database Management</CardTitle>
+              <CardDescription>Manage detection data and historical records</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Data Retention</Label>
-                <Select defaultValue="90days">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select retention period" />
+                <Label htmlFor="data-retention">Data Retention Period</Label>
+                <Select defaultValue="30">
+                  <SelectTrigger id="data-retention">
+                    <SelectValue placeholder="Select data retention period" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="30days">30 Days</SelectItem>
-                    <SelectItem value="90days">90 Days</SelectItem>
-                    <SelectItem value="180days">180 Days</SelectItem>
-                    <SelectItem value="365days">1 Year</SelectItem>
-                    <SelectItem value="forever">Forever</SelectItem>
+                    <SelectItem value="7">7 Days</SelectItem>
+                    <SelectItem value="30">30 Days</SelectItem>
+                    <SelectItem value="90">90 Days</SelectItem>
+                    <SelectItem value="180">6 Months</SelectItem>
+                    <SelectItem value="365">1 Year</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">How long to keep detection history</p>
               </div>
               
               <div className="space-y-2">
-                <Label>Backup and Restore</Label>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Database className="h-4 w-4" />
-                    <span>Backup Data</span>
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Upload className="h-4 w-4" />
-                    <span>Restore</span>
+                <Label htmlFor="seed-count">Number of Records to Seed</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="seed-count"
+                    type="number"
+                    value={seedCount}
+                    onChange={(e) => setSeedCount(parseInt(e.target.value) || 100)}
+                    min={10}
+                    max={1000}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleSeedDatabase}
+                    disabled={dbStatus.operation === "seeding" && dbStatus.status === "in-progress"}
+                    className="whitespace-nowrap"
+                  >
+                    {dbStatus.operation === "seeding" && dbStatus.status === "in-progress" ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                        Seeding...
+                      </>
+                    ) : (
+                      <>
+                        <Database className="h-4 w-4 mr-2" />
+                        Seed Data
+                      </>
+                    )}
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">Creates mock detection records for testing</p>
               </div>
               
-              <div className="space-y-2 border-t pt-4 mt-4">
-                <Label className="text-red-500">Danger Zone</Label>
-                <div className="flex gap-2">
-                  <Button variant="destructive" size="sm" className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    <span>Clear All Data</span>
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">This action cannot be undone</p>
+              <div className="pt-2">
+                <Button 
+                  variant="destructive" 
+                  className="w-full" 
+                  onClick={handleClearDatabase}
+                  disabled={dbStatus.operation === "clearing" && dbStatus.status === "in-progress"}
+                >
+                  {dbStatus.operation === "clearing" && dbStatus.status === "in-progress" ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                      Clearing Database...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear All Detection Data
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>

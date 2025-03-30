@@ -1,0 +1,15 @@
+INFO:     Will watch for changes in these directories: ['/Users/tdl321/Downloads/Coding/Cursor Projects/Recognise/detection_api']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [89183] using StatReload
+INFO:     Started server process [89188]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Warning: Model file model/best.pt not found. Will use default YOLOv8n model.
+Model loaded successfully: model/best.pt
+Supabase client initialized successfully
+INFO:     127.0.0.1:62649 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [89188]
+INFO:     Stopping reloader process [89183]

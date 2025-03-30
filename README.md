@@ -1,120 +1,153 @@
-# Waste Detection Web App
+# 🗑️ Waste Detection Web App
 
-A locally hosted web application for real-time trash detection using YOLOv11 via laptop camera or cloud GPU (Google Colab). The app includes user-defined detection zones, audio alarms for correct/incorrect disposal, inference speed benchmarking, and a real-time analytics dashboard.
+A real-time waste detection and analytics system that helps reduce recycling contamination and improve waste diversion at Amherst.
 
-## Project Structure
+![Waste Detection](https://via.placeholder.com/800x400?text=Waste+Detection+Web+App)
 
-- `model/`: Contains YOLOv11 scripts and model files
-- `detection_api/`: FastAPI backend for waste detection
-- `webapp/`: Next.js frontend with camera integration
+## 🚀 Features
 
-## Features
+- **Real-time Detection**: YOLOv11 model identifies waste types (Glass, Metal, Paper, Plastic) from webcam feed
+- **Detection Zones**: User-defined zones to monitor specific areas
+- **Audio Feedback**: Configurable sounds for correct/incorrect waste disposal
+- **Analytics Dashboard**: Real-time and historical waste data visualization
+- **Performance Metrics**: Inference speed benchmarking for model performance
 
-- Real-time waste detection via laptop/webcam
-- User-defined detection zones for monitoring (drag-and-draw opaque boxes)
-- Audio alarms for correct/incorrect disposal
-- Inference speed benchmarking
-- Analytics dashboard for waste metrics
-- Database logging for waste diversion data
+## 📋 Prerequisites
 
-## Tech Stack
+- Node.js (v16+)
+- Python (3.8+)
+- Supabase account (free tier works fine)
+- Webcam (built-in or external)
+
+## ⚙️ Tech Stack
 
 ### Frontend
-- Next.js (App Router) with Shadcn UI components
-- `react-webcam` for camera feed
-- Tremor for analytics visualization
-- Tailwind CSS for styling
+- Next.js (App Router)
+- Shadcn UI components
+- React Webcam
+- Tremor for data visualization
+- Tailwind CSS
 
 ### Backend
-- FastAPI for API endpoints (`/detect`, `/analytics`)
-- Ultralytics YOLOv11 (Python/Conda; trained on Roboflow dataset)
-- Supabase (PostgreSQL) for logs/analytics with Realtime capabilities
+- FastAPI
+- Ultralytics YOLOv11
+- Supabase (PostgreSQL + Realtime)
 
-### Data Processing
-- Local processing using CPU/GPU
-- Optional cloud GPU processing via Google Colab
+## 🛠️ Installation
 
-## Getting Started
+### Quick Setup
 
-### Prerequisites
-- Python 3.8+ with Conda environment
-- Node.js 18+
-- Camera/webcam access
-- (Optional) Google Colab account for cloud GPU training
+Run our interactive setup script:
 
-### Setup Local Environment
-1. Set up the YOLOv11 environment:
-   ```bash
-   conda create -n yolo-env1 python=3.8
-   conda activate yolo-env1
-   pip install -r requirements.txt
-   ```
-
-### Using Google Colab (Alternative for Training)
-1. Create a new Google Colab notebook
-2. Install dependencies:
-   ```python
-   !pip install ultralytics supabase-py
-   ```
-3. Clone the repository:
-   ```python
-   !git clone https://github.com/yourusername/waste-detection-webapp.git
-   ```
-4. Train the model on Roboflow dataset:
-   ```python
-   from ultralytics import YOLO
-   
-   # Download dataset from Roboflow
-   !pip install roboflow
-   from roboflow import Roboflow
-   rf = Roboflow(api_key="YOUR_API_KEY")
-   project = rf.workspace("proje-nkf76").project("atik-ayristirma")
-   dataset = project.version(1).download("yolov8")
-   
-   # Train YOLOv11 model
-   model = YOLO("yolov11n.pt")
-   results = model.train(data="atik-ayristirma-1/data.yaml", epochs=50)
-   ```
-
-### Starting the Application
-1. Start the detection API:
-   ```bash
-   cd detection_api
-   uvicorn main:app --reload
-   ```
-
-2. Start the web application:
-   ```bash
-   cd webapp
-   npm install
-   npm run dev
-   ```
-
-3. Access the application at `http://localhost:3000`
-
-## Environment Variables
-
-Create a `.env` file in the root directory:
-
-```
-MODEL_PATH=model/best.pt
-CONFIDENCE_THRESHOLD=0.5
-SUPABASE_URL=your-supabase-url
-SUPABASE_KEY=your-supabase-anon-key
+```bash
+node setupDemo.js
 ```
 
-## Roadmap
+This script will guide you through:
+1. Setting up Supabase
+2. Configuring your environment variables
+3. Starting the FastAPI backend
+4. Running the Next.js frontend
 
-- [x] Environment Setup
-- [ ] Backend API
-- [ ] Frontend Setup
-- [ ] Analytics Dashboard
-- [ ] Alarm System
+### Manual Setup
 
-## Waste Categories
+1. **Clone the repository**
 
-Currently, the system is trained to detect four waste categories:
-- Glass
-- Metal
-- Paper 
-- Plastic 
+```bash
+git clone <repository-url>
+cd waste-detection-webapp
+```
+
+2. **Install frontend dependencies**
+
+```bash
+npm install
+```
+
+3. **Set up environment variables**
+
+Copy the example env file and fill in your Supabase details:
+
+```bash
+cp .env.example .env.local
+```
+
+4. **Set up the FastAPI backend**
+
+```bash
+cd detection_api
+pip install -r requirements.txt
+```
+
+5. **Set up Supabase**
+
+- Create a new project at [Supabase](https://supabase.com)
+- Create a `detections` table with the following schema:
+  ```sql
+  CREATE TABLE IF NOT EXISTS detections (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    waste_type TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    inference_speed FLOAT NOT NULL
+  );
+  ```
+- Enable Realtime for the `detections` table
+
+## 🚀 Running the Application
+
+1. **Start the FastAPI backend**
+
+```bash
+cd detection_api
+uvicorn main:app --reload
+```
+
+2. **Start the Next.js frontend**
+
+```bash
+npm run dev
+```
+
+3. **Open your browser at [http://localhost:3000](http://localhost:3000)**
+
+## 📱 Usage Guide
+
+### 📷 Detection Page
+
+1. Allow camera access when prompted
+2. Draw detection zones by clicking and dragging on the camera feed
+3. Position waste items in view to see real-time detection
+4. Listen for audio feedback on correct/incorrect disposal
+
+### 📊 Analytics Page
+
+1. View real-time waste statistics
+2. Toggle between live and historical data
+3. Switch between bar and pie charts for different visualizations
+4. Analyze trends in waste disposal and contamination rates
+
+### ⚙️ Settings Page
+
+1. Adjust detection sensitivity
+2. Configure audio feedback sounds and volume
+3. Set inference speed thresholds
+4. Seed the database with mock data for testing
+
+## 🧠 Model Training
+
+The YOLOv11 model was trained on the [Roboflow waste sorting dataset](https://universe.roboflow.com/proje-nkf76/atik-ayristirma).
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgements
+
+- Amherst College Sustainability Office
+- Ultralytics for the YOLOv11 implementation
+- Roboflow for the waste sorting dataset 
