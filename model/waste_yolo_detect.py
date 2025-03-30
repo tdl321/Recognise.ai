@@ -1,7 +1,3 @@
-*/
-*  Description: Enables Object Detection on Camera and Activates the camera
-*  Code sourced from ejtech.io
-*/
 import os
 import sys
 import argparse
@@ -11,6 +7,26 @@ import time
 import cv2
 import numpy as np
 from ultralytics import YOLO
+
+# For new sound processes
+import threading
+
+# Import playsound for audio playback
+from playsound import playsound  
+
+# Timestamp of the last time the sound was played
+last_played_time_right = 0
+last_played_time_wrong = 0
+sound_delay = 2 
+
+# For threads
+def play_sound(sound_file):
+    """Plays a sound in a separate thread."""
+    playsound(sound_file)
+    
+# Define the preset zone (top-left and bottom-right coordinates)
+preset_zone_left = [(0, 0), (1280/3, 720)]  # Example coordinates
+preset_zone_right = [(2*1280/3, 0), (1280, 720)]  # Example coordinates
 
 # Define and parse user input arguments
 
@@ -205,6 +221,36 @@ while True:
 
             # Basic example: count the number of objects in the image
             object_count = object_count + 1
+            
+            # Check if bounding box overlaps with preset zone - FOR CORRECT OBJECTS
+            if (
+                xmin < preset_zone_left[1][0] and xmax > preset_zone_left[0][0] and
+                ymin < preset_zone_left[1][1] and ymax > preset_zone_left[0][1]
+            ):
+                print(f"{classname} detected in preset zone! CORRECT")
+
+                # Play sound if specific item is detected
+                if classname == "paper" or classname == "plastic" or classname == "metal":  # Replace with actual class name
+                    current_time = time.time()
+                    if (current_time - last_played_time_right) > sound_delay:
+                        sound_file = "sounds/correct_answer.wav"  # Replace with your sound file
+                        threading.Thread(target=play_sound, args=(sound_file,), daemon=True).start()
+                        last_played_time_right = time.time()
+                        
+            # Check if bounding box overlaps with preset zone - FOR WRONG OBJECTS
+            if (
+                xmin < preset_zone_right[1][0] and xmax > preset_zone_right[0][0] and
+                ymin < preset_zone_right[1][1] and ymax > preset_zone_right[0][1]
+            ):
+                print(f"{classname} detected in preset zone! WRONG")
+
+                # Play sound if specific item is detected
+                if classname == "paper" or classname == "plastic" or classname == "metal":  # Replace with actual class name
+                    current_time = time.time()
+                    if (current_time - last_played_time_wrong) > sound_delay:
+                        sound_file = "sounds/wrong_answer.wav"  # Replace with your sound file
+                        threading.Thread(target=play_sound, args=(sound_file,), daemon=True).start()
+                        last_played_time_wrong = time.time()
 
     # Calculate and draw framerate (if using video, USB, or Picamera source)
     if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
