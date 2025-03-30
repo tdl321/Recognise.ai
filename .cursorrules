@@ -1,0 +1,98 @@
+### **cursorrules File: Waste Detection Web App**
+
+---
+
+### **Project Summary**
+
+Build a locally hosted web app using YOLOv11 for real-time trash detection via laptop camera or cloud GPU (Google Colab). Features include user-defined detection zones, audio alarms for correct/incorrect disposal, inference speed benchmarking, and a real-time analytics dashboard. Aligns with Amherst’s zero-waste goals by reducing contamination, improving recycling accuracy, and providing granular waste data.
+
+**Alignment with Guidelines**:
+
+*   Targets student/staff confusion about recycling (via real-time detection).
+*   Provides custodial teams contamination metrics (analytics logs).
+*   Supports sustainability office with live waste diversion data.
+
+---
+
+### **Data Flow**
+
+1.  **Frontend**: Camera feed → Frame capture → User-defined detection zones (drag-and-draw opaque boxes) → API request.
+2.  **Backend**: YOLOv11 processes frames → Returns waste class/coordinates and inference speed → Logs to DB. Handles errors if detection fails.
+3.  **Database**: Stores waste type, timestamp, disposal correctness, and alarm events. Supplies real-time updates to the dashboard via Supabase Realtime.
+4.  **Dashboard**: Pulls DB data → Updates graphs/alarm logs dynamically using Tremor components. Differentiates historical data (hardcoded) from live updates (light green indicators).
+
+---
+
+### **Tech Stack**
+
+**Frontend**:
+
+*   Next.js (App Router) + Shadcn UI components.
+*   `react-webcam` for camera feed; zone selection via cursor drag-and-draw functionality.
+*   Tremor for analytics visualization; Tailwind CSS styling.
+
+**Backend**:
+
+*   FastAPI (`POST /detect`, `GET /analytics`).
+*   Ultralytics YOLOv11 (Python/Conda; trained on Roboflow dataset: [https://universe.roboflow.com/proje-nkf76/atik-ayristirma](https://universe.roboflow.com/proje-nkf76/atik-ayristirma)).
+*   Supabase (PostgreSQL) for logs/analytics with Realtime capabilities.
+
+---
+
+### **Project Roadmap**
+
+*(50-word prompts per step; naming: `[Component]-[Action]`)*
+
+**Environment Setup**
+
+1.  **conda-env-activate**: Activate `yolo-env1`, install `ultralytics` and `opencv-python`. Verify Google Colab training compatibility instead of local GPU setup.
+2.  **model-test**: Train YOLOv11 on Roboflow dataset; validate accuracy for Glass, Metal, Paper, Plastic categories; benchmark inference speed for real-time performance. Use `yolo_detect.py` script from [https://www.ejtech.io/code/yolo_detect.py](https://www.ejtech.io/code/yolo_detect.py).
+3.  **camera-calibration**: Test React Webcam feed at 1280x720 resolution; integrate detection zone drawing functionality with color-coded regions.
+
+**Backend API**
+
+1.  **fastapi-init**: Scaffold `detection_api` with `/detect` endpoint and error handling for failed detections or slow inference speeds. Configure CORS for frontend integration.
+2.  **model-integration**: Load trained YOLOv11 model into FastAPI; preprocess frames (resize, normalize). Benchmark API response time for real-time performance validation.
+3.  **supabase-connect**: Create `detections` table (columns: `timestamp`, `waste_type`, `is_correct`, `inference_speed`). Enable Supabase Realtime updates for analytics dashboard sync.
+
+**Frontend Setup**
+
+1.  **nextjs-init**: Create `waste-detection-webapp` with `app/` directory; install Shadcn UI components for consistent styling across v0 compatibility checks.
+2.  **camera-component**: Add `<Webcam>` integration; implement drag-and-draw detection zones with distinct colors for different regions (e.g., blue for recycling bins). Style overlay dynamically using Tailwind CSS.
+3.  **api-integration**: Fetch `/detect` endpoint on frame capture; display bounding boxes via `<canvas>` and inference speed benchmarks in the UI.
+
+**Analytics Dashboard**
+
+1.  **tremor-setup**: Create `DashboardPage` using Tremor’s `<LineChart>` and `<BarChart>` components for disposal trends and waste breakdowns by type (Glass, Metal, Paper, Plastic). Ensure compatibility with Chart.js elements from v0.
+2.  **realtime-updates**: Use Supabase’s Realtime API to subscribe to changes in the `detections` table; dynamically update Tremor components in response to new data.
+3.  **historical-data-mockup**: Mock initial dataset (CSV) for testing dashboard functionality; migrate to live data post-Supabase sync with clear visual differentiation between historical and live updates.
+
+**Alarm System & Settings Integration**
+
+1.  **audio-triggers**: Add `use-sound` library; map detection results (`is_correct`) to distinct sounds (chime vs buzzer). Ensure volume control persists via localStorage settings.
+2.  **settings-page-design**: Create sliders and dropdowns for alarm customization thresholds and sound selection using Shadcn UI components.
+3.  **integration-test-suite**: Simulate correct/incorrect disposals in testing environment; verify DB logs → dashboard sync → alarm triggers.
+
+---
+
+### **Naming Conventions**
+
+*   **Directories**: `detection_api/` (FastAPI), `webapp/` (Next.js), `model/` (YOLO scripts).
+*   **Branches**: `feat/camera-integration`, `fix/analytics-realtime`.
+*   **Variables**: `detectionZone` (frontend), `waste_class` and `inference_speed` (DB schema).
+
+---
+
+### **IDE Tips for Cursor**
+
+1.  Use **Workspace Settings** to auto-format Python (Black) + JS/TS (Prettier).
+2.  Enable Supabase CLI for local DB mocking during development/testing phases.
+3.  Bookmark `/detect`, `/analytics`, and `/settings` endpoints in API tester tools like Postman.
+
+---
+
+### Status Updates
+
+*   Aligns fully with updated specifications including cloud GPU training on Google Colab, dynamic Tremor dashboard integration, and enhanced error handling mechanisms.
+*   Focused on MVP real-time sorting + analytics capabilities while omitting security/auth features temporarily.
+*   Extensions Post-Hackathon: Add compost/e-waste tracking features, gamification elements like student leaderboards, and expanded waste categories beyond Glass, Metal, Paper, Plastic.
