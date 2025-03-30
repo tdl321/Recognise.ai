@@ -42,6 +42,8 @@ export default function AnalyticsPage() {
         // Fetch stats
         const statsData = await fetchDetectionStats()
         console.log("Stats data:", statsData)
+        console.log("Waste types:", statsData.wasteTypes)
+        console.log("Total detections:", statsData.totalDetections)
         setStats(statsData)
         
         // Calculate accuracy
@@ -88,10 +90,16 @@ export default function AnalyticsPage() {
         }
         
         // Transform waste type data for chart
-        const wasteTypeData = Object.entries(statsData.wasteTypes).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value
-        }))
+        const wasteTypeData = Object.entries(statsData.wasteTypes).map(([name, value]) => {
+          // Ensure we have valid data for chart rendering
+          const formattedValue = typeof value === 'number' && !isNaN(value) ? value : 0;
+          console.log(`Chart data prepared: ${name} = ${formattedValue}`);
+          return {
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            value: formattedValue
+          };
+        });
+        console.log("Chart data array:", wasteTypeData);
         setChartData(wasteTypeData)
       } catch (error) {
         console.error('Error loading analytics data:', error)
@@ -193,7 +201,9 @@ export default function AnalyticsPage() {
   const refreshData = async () => {
     setIsLoading(true)
     try {
+      console.log("Manually refreshing data...")
       const statsData = await fetchDetectionStats()
+      console.log("Refreshed stats:", statsData)
       setStats(statsData)
       
       const totalDetections = statsData.correctDisposals + statsData.incorrectDisposals
@@ -201,11 +211,48 @@ export default function AnalyticsPage() {
         setDetectionAccuracy((statsData.correctDisposals / totalDetections) * 100)
       }
       
+      // Force refetch recent detections
+      const recentDetections = await fetchRecentDetections(20)
+      console.log("Refreshed recent detections:", recentDetections)
+      
+      if (recentDetections && recentDetections.length > 0) {
+        setSupabaseConnected(true)
+        const incorrectDisposals = recentDetections
+          .filter(d => !d.is_correct)
+          .slice(0, 4)
+          .map(d => {
+            // Mapping for correct bins
+            const correctBinMap: Record<string, string> = {
+              'plastic': 'Paper',
+              'paper': 'Plastic',
+              'glass': 'Metal',
+              'metal': 'Glass',
+              'cardboard': 'Trash',
+              'other': 'Recycling'
+            }
+            const wasteName = d.waste_type.charAt(0).toUpperCase() + d.waste_type.slice(1)
+            return {
+              time: new Date(d.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              type: wasteName,
+              correctBin: correctBinMap[d.waste_type] || 'Other',
+              confidence: Math.round(Math.random() * 10 + 80) 
+            }
+          })
+        
+        setRecentIncorrectDisposals(incorrectDisposals)
+      }
+      
       // Update chart data
-      const wasteTypeData = Object.entries(statsData.wasteTypes).map(([name, value]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        value
-      }))
+      const wasteTypeData = Object.entries(statsData.wasteTypes).map(([name, value]) => {
+        // Ensure we have valid data for chart rendering
+        const formattedValue = typeof value === 'number' && !isNaN(value) ? value : 0;
+        console.log(`Chart data prepared: ${name} = ${formattedValue}`);
+        return {
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          value: formattedValue
+        };
+      });
+      console.log("Refreshed chart data:", wasteTypeData);
       setChartData(wasteTypeData)
     } catch (error) {
       console.error('Error refreshing data:', error)

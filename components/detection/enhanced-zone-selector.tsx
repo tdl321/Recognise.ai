@@ -1,8 +1,21 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
+import { useRef, useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Layers, Trash2, Plus, Move } from "lucide-react"
+
+// Debounce function to limit frequent calls
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  return function(...args: Parameters<T>) {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
 export interface DetectionZone {
   id: string
@@ -43,6 +56,7 @@ export function EnhancedZoneSelector({
   const [resizingZoneId, setResizingZoneId] = useState<string | null>(null)
   const [resizeCorner, setResizeCorner] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
   const [newZoneType, setNewZoneType] = useState('Plastic')
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
   // Get color for a waste type
   const getColorForWasteType = (type: string): string => {
@@ -55,125 +69,190 @@ export function EnhancedZoneSelector({
     }
   }
 
-  // Initialize canvas and draw zones
+  // Draw all zones on the canvas - debounced version to improve performance
+  const drawZonesDebounced = useCallback(
+    debounce(() => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+  
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+  
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+      // Draw existing zones
+      zones.forEach(zone => {
+        const [x1, y1, x2, y2] = zone.coordinates
+        const width = x2 - x1
+        const height = y2 - y1
+  
+        // Draw semi-transparent rectangle
+        ctx.fillStyle = `${zone.color}40` // 25% opacity
+        ctx.fillRect(x1, y1, width, height)
+  
+        // Draw border (thicker for active zone)
+        ctx.strokeStyle = zone.color
+        ctx.lineWidth = zone.id === activeZoneId ? 3 : 2
+        ctx.strokeRect(x1, y1, width, height)
+        
+        // Draw zone name
+        ctx.fillStyle = zone.color
+        ctx.font = '14px sans-serif'
+        
+        // Background for the label
+        const labelText = zone.name
+        const labelWidth = ctx.measureText(labelText).width + 10
+        ctx.fillStyle = zone.color
+        ctx.fillRect(x1, y1, labelWidth, 22)
+        
+        // Label text
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(labelText, x1 + 5, y1 + 15)
+        
+        // Draw resize handles for active zone
+        if (zone.id === activeZoneId) {
+          const handleSize = 8
+          const halfHandleSize = handleSize / 2
+          
+          // Draw handles at corners
+          ctx.fillStyle = 'white'
+          ctx.strokeStyle = zone.color
+          ctx.lineWidth = 1
+          
+          // Top-left
+          ctx.beginPath()
+          ctx.rect(x1 - halfHandleSize, y1 - halfHandleSize, handleSize, handleSize)
+          ctx.fill()
+          ctx.stroke()
+          
+          // Top-right
+          ctx.beginPath()
+          ctx.rect(x2 - halfHandleSize, y1 - halfHandleSize, handleSize, handleSize)
+          ctx.fill()
+          ctx.stroke()
+          
+          // Bottom-left
+          ctx.beginPath()
+          ctx.rect(x1 - halfHandleSize, y2 - halfHandleSize, handleSize, handleSize)
+          ctx.fill()
+          ctx.stroke()
+          
+          // Bottom-right
+          ctx.beginPath()
+          ctx.rect(x2 - halfHandleSize, y2 - halfHandleSize, handleSize, handleSize)
+          ctx.fill()
+          ctx.stroke()
+        }
+      })
+  
+      // Draw zone being created
+      if (isDrawing && newZone) {
+        const [x1, y1, x2, y2] = newZone
+        const width = x2 - x1
+        const height = y2 - y1
+  
+        const newColor = getColorForWasteType(newZoneType)
+        
+        // Draw semi-transparent rectangle
+        ctx.fillStyle = `${newColor}40` // 25% opacity
+        ctx.fillRect(x1, y1, width, height)
+  
+        // Draw border
+        ctx.strokeStyle = newColor
+        ctx.lineWidth = 2
+        ctx.strokeRect(x1, y1, width, height)
+        
+        // Show dimensions
+        ctx.fillStyle = 'white'
+        ctx.font = '12px sans-serif'
+        ctx.fillText(`${Math.round(width)} x ${Math.round(height)}`, x1 + width / 2 - 20, y1 + height / 2)
+      }
+    }, 10), // 10ms debounce delay for smooth visuals
+    [zones, activeZoneId, newZone, isDrawing, isDrawingMode, isMoveMode, newZoneType]
+  );
+
+  // Replace original drawZones with a function that calls the debounced version
+  const drawZones = () => {
+    drawZonesDebounced();
+  };
+
+  // Initialize canvas and draw zones, plus handle resizing
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    canvas.width = imageWidth
-    canvas.height = imageHeight
-
-    drawZones()
-  }, [imageWidth, imageHeight, zones, activeZoneId, newZone])
-
-  // Draw all zones on the canvas
-  const drawZones = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    // Draw existing zones
-    zones.forEach(zone => {
-      const [x1, y1, x2, y2] = zone.coordinates
-      const width = x2 - x1
-      const height = y2 - y1
-
-      // Draw semi-transparent rectangle
-      ctx.fillStyle = `${zone.color}40` // 25% opacity
-      ctx.fillRect(x1, y1, width, height)
-
-      // Draw border (thicker for active zone)
-      ctx.strokeStyle = zone.color
-      ctx.lineWidth = zone.id === activeZoneId ? 3 : 2
-      ctx.strokeRect(x1, y1, width, height)
-      
-      // Draw zone name
-      ctx.fillStyle = zone.color
-      ctx.font = '14px sans-serif'
-      
-      // Background for the label
-      const labelText = zone.name
-      const labelWidth = ctx.measureText(labelText).width + 10
-      ctx.fillStyle = zone.color
-      ctx.fillRect(x1, y1, labelWidth, 22)
-      
-      // Label text
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(labelText, x1 + 5, y1 + 15)
-      
-      // Draw resize handles for active zone
-      if (zone.id === activeZoneId) {
-        const handleSize = 8
-        const halfHandleSize = handleSize / 2
+    const resizeCanvas = () => {
+      const container = containerRef.current
+      if (container) {
+        // Set canvas dimensions to match the container's display size
+        const rect = container.getBoundingClientRect()
         
-        // Draw handles at corners
-        ctx.fillStyle = 'white'
-        ctx.strokeStyle = zone.color
-        ctx.lineWidth = 1
+        // Store the new size in state for calculations
+        const newWidth = rect.width;
+        const newHeight = rect.height;
         
-        // Top-left
-        ctx.beginPath()
-        ctx.rect(x1 - halfHandleSize, y1 - halfHandleSize, handleSize, handleSize)
-        ctx.fill()
-        ctx.stroke()
-        
-        // Top-right
-        ctx.beginPath()
-        ctx.rect(x2 - halfHandleSize, y1 - halfHandleSize, handleSize, handleSize)
-        ctx.fill()
-        ctx.stroke()
-        
-        // Bottom-left
-        ctx.beginPath()
-        ctx.rect(x1 - halfHandleSize, y2 - halfHandleSize, handleSize, handleSize)
-        ctx.fill()
-        ctx.stroke()
-        
-        // Bottom-right
-        ctx.beginPath()
-        ctx.rect(x2 - halfHandleSize, y2 - halfHandleSize, handleSize, handleSize)
-        ctx.fill()
-        ctx.stroke()
+        // Only update if dimensions actually changed (prevents unnecessary redraws)
+        if (canvasSize.width !== newWidth || canvasSize.height !== newHeight) {
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          
+          // Update size state
+          setCanvasSize({ width: newWidth, height: newHeight });
+          
+          // Redraw with new dimensions
+          drawZones();
+        }
       }
-    })
+    }
 
-    // Draw zone being created
-    if (isDrawing && newZone) {
-      const [x1, y1, x2, y2] = newZone
-      const width = x2 - x1
-      const height = y2 - y1
+    // Initial sizing
+    resizeCanvas()
+    
+    // Add resize listener with debouncing to prevent excessive redraws
+    const debouncedResize = debounce(resizeCanvas, 100);
+    window.addEventListener('resize', debouncedResize)
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('resize', debouncedResize)
+    }
+  }, [canvasSize.width, canvasSize.height])
 
-      const newColor = getColorForWasteType(newZoneType)
-      
-      // Draw semi-transparent rectangle
-      ctx.fillStyle = `${newColor}40` // 25% opacity
-      ctx.fillRect(x1, y1, width, height)
+  // Redraw zones when they change
+  useEffect(() => {
+    drawZones()
+  }, [zones, activeZoneId, newZone, isDrawingMode, isMoveMode])
 
-      // Draw border
-      ctx.strokeStyle = newColor
-      ctx.lineWidth = 2
-      ctx.strokeRect(x1, y1, width, height)
-      
-      // Show dimensions
-      ctx.fillStyle = 'white'
-      ctx.font = '12px sans-serif'
-      ctx.fillText(`${Math.round(width)} x ${Math.round(height)}`, x1 + width / 2 - 20, y1 + height / 2)
+  // Get canvas coordinates from event
+  const getCanvasCoordinates = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    
+    const rect = canvas.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    
+    // Scale by canvas ratio if the display size and internal size differ
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    return {
+      x: x * scaleX,
+      y: y * scaleY
     }
   }
 
-  // Handle mouse down for drawing or selecting
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Handle pointer down for drawing or selecting
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
     const canvas = canvasRef.current
     if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    
+    // Capture pointer to track movements outside canvas
+    canvas.setPointerCapture(e.pointerId)
+    
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY)
 
     // Check if we're in drawing mode
     if (isDrawingMode) {
@@ -236,14 +315,13 @@ export function EnhancedZoneSelector({
     onActiveZoneChange(null)
   }
 
-  // Handle mouse move for drawing or dragging
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Handle pointer move for drawing or dragging
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
     const canvas = canvasRef.current
     if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY)
 
     // If drawing a new zone
     if (isDrawingMode && isDrawing && startPos) {
@@ -310,8 +388,14 @@ export function EnhancedZoneSelector({
     }
   }
 
-  // Handle mouse up for completing draw/drag actions
-  const handleMouseUp = () => {
+  // Handle pointer up
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (canvas) {
+      canvas.releasePointerCapture(e.pointerId)
+    }
+    
     // If we were drawing a new zone, create it
     if (isDrawingMode && isDrawing && newZone) {
       const [x1, y1, x2, y2] = newZone
@@ -368,18 +452,19 @@ export function EnhancedZoneSelector({
   }
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative ${className} w-full h-full`}>
       <canvas
         ref={canvasRef}
         className={`w-full h-full ${isDrawingMode || isMoveMode ? 'cursor-crosshair' : ''}`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{ touchAction: 'none' }}
       />
       
       {/* Tool palette */}
-      <div className="absolute top-2 left-2 flex flex-col space-y-2">
+      <div className="absolute top-2 left-2 flex flex-col space-y-2 z-10">
         <Button
           size="sm"
           variant={isDrawingMode && newZoneType === 'Plastic' ? "default" : "outline"}

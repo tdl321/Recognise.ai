@@ -84,21 +84,50 @@ export const useAudioContext = () => {
     }
   };
   
-  // Initialize sound hooks
-  const [playCorrect] = useSound(getSoundPath('correct'), { 
+  // Initialize sound hooks with explicit handling for loading errors
+  const [playCorrect, { sound: correctSound }] = useSound(getSoundPath('correct'), { 
     volume: settings.volume,
     soundEnabled: settings.enabled,
+    interrupt: true, // Allow sounds to interrupt each other
   });
   
-  const [playIncorrect] = useSound(getSoundPath('incorrect'), { 
+  const [playIncorrect, { sound: incorrectSound }] = useSound(getSoundPath('incorrect'), { 
     volume: settings.volume,
     soundEnabled: settings.enabled,
+    interrupt: true,
   });
   
-  const [playWarning] = useSound(getSoundPath('warning'), { 
+  const [playWarning, { sound: warningSound }] = useSound(getSoundPath('warning'), { 
     volume: settings.volume,
     soundEnabled: settings.enabled,
+    interrupt: true,
   });
+  
+  // Check if sounds loaded correctly
+  useEffect(() => {
+    console.log("Audio context initialized with settings:", settings);
+    console.log("Sound paths:", {
+      correct: getSoundPath('correct'),
+      incorrect: getSoundPath('incorrect'),
+      warning: getSoundPath('warning')
+    });
+    
+    // Create test sounds to check if audio works
+    const testAudio = new Audio(getSoundPath('correct'));
+    testAudio.addEventListener('canplaythrough', () => {
+      console.log('Audio can play through - sound system works');
+    });
+    testAudio.addEventListener('error', (e) => {
+      console.error('Audio error when testing sound system:', e);
+    });
+    
+    // Check browser audio policies
+    if (typeof window !== 'undefined') {
+      document.addEventListener('click', () => {
+        console.log('User interaction detected - should be able to play audio now');
+      }, { once: true });
+    }
+  }, []);
   
   // Update settings and save to localStorage
   const updateSettings = (newSettings: Partial<SoundSettings>) => {
@@ -109,18 +138,33 @@ export const useAudioContext = () => {
   
   // Play a sound based on type
   const playSound = (type: SoundType) => {
-    if (!settings.enabled) return;
+    if (!settings.enabled) {
+      console.log(`Sound disabled. Not playing ${type} sound.`);
+      return;
+    }
     
-    switch (type) {
-      case 'correct':
-        playCorrect();
-        break;
-      case 'incorrect':
-        playIncorrect();
-        break;
-      case 'warning':
-        playWarning();
-        break;
+    console.log(`Attempting to play ${type} sound. Volume: ${settings.volume}, Sound choice: ${settings.choice}`);
+    const soundPath = getSoundPath(type);
+    console.log(`Sound path: ${soundPath}`);
+    
+    try {
+      switch (type) {
+        case 'correct':
+          console.log('Playing correct sound');
+          playCorrect();
+          break;
+        case 'incorrect':
+          console.log('Playing incorrect sound');
+          playIncorrect();
+          break;
+        case 'warning':
+          console.log('Playing warning sound');
+          playWarning();
+          break;
+      }
+      console.log(`Played ${type} sound successfully`);
+    } catch (error) {
+      console.error(`Error playing ${type} sound:`, error);
     }
   };
   
@@ -133,5 +177,23 @@ export const useAudioContext = () => {
     settings,
     updateSettings,
     playSound,
+  };
+};
+
+/**
+ * Simplified hook for playing sounds in the application
+ * @returns Object with play function and audio settings
+ */
+export const useAudio = () => {
+  const audioContext = useAudioContext();
+  
+  return {
+    play: audioContext.playSound,
+    enabled: audioContext.settings.enabled,
+    setEnabled: (enabled: boolean) => audioContext.updateSettings({ enabled }),
+    volume: audioContext.settings.volume,
+    setVolume: (volume: number) => audioContext.updateSettings({ volume }),
+    soundChoice: audioContext.settings.choice,
+    setSoundChoice: (choice: SoundChoice) => audioContext.updateSettings({ choice }),
   };
 }; 

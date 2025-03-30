@@ -1,300 +1,350 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { fetchDetectionStats, subscribeToDetections, testConnection, seedSampleData } from "@/lib/supabase"
+import { CircleOff, RefreshCw, Zap, AlertTriangle, Bug, CheckCircle2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ArrowUpRight, Clock, Trash2, AlertTriangle, CheckCircle, Loader2, RefreshCw, Bug, Badge } from "lucide-react"
-import { WasteDistributionChart } from "@/components/analytics/waste-distribution-chart"
-import { DetectionStatus } from "@/components/detection/detection-status"
-import { fetchDetectionStats, subscribeToDetections, seedSampleData } from "@/lib/supabase"
-import { debugSupabaseData } from "@/lib/utils"
 import Link from "next/link"
-
-interface DashboardStats {
-  totalDetections: number;
-  incorrectDisposals: number;
-  detectionAccuracy: number;
-  wasteTypes: Record<string, number>;
-}
+import { WasteDistributionChart } from "@/components/analytics/waste-distribution-chart"
 
 export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
-  const [stats, setStats] = useState<DashboardStats>({
+  const [isConnecting, setIsConnecting] = useState(true)
+  const [isConnected, setIsConnected] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [chartMode, setChartMode] = useState<'bar' | 'donut'>('bar')
+  const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState({
     totalDetections: 0,
     incorrectDisposals: 0,
     detectionAccuracy: 0,
-    wasteTypes: {}
+    wasteTypes: {} as Record<string, number>,
   })
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
+  // Function to load data with connection test and loading state
   const loadData = async () => {
     setIsLoading(true)
-    try {
-      console.log("Fetching dashboard data from Supabase...")
-      const statsData = await fetchDetectionStats()
-      console.log("Dashboard data:", statsData)
-      
-      if (statsData) {
-        const totalDetections = statsData.totalDetections;
-        const incorrectDisposals = statsData.incorrectDisposals;
-        const correctDisposals = statsData.correctDisposals;
+    setError(null)
+    
+    // First test the connection
+    if (isConnecting) {
+      try {
+        const connected = await testConnection()
+        setIsConnected(connected)
+        setIsConnecting(false)
         
-        // Calculate accuracy
-        const accuracy = totalDetections > 0 
-          ? ((correctDisposals / totalDetections) * 100).toFixed(1) 
-          : "0";
-          
-        setStats({
-          totalDetections,
-          incorrectDisposals,
-          detectionAccuracy: parseFloat(accuracy),
-          wasteTypes: statsData.wasteTypes
-        })
-        
-        setLastUpdated(new Date())
+        if (!connected) {
+          setError("Failed to connect to database. Please check your connection.")
+        }
+      } catch (err) {
+        console.error("Connection test failed:", err)
+        setIsConnecting(false)
+        setIsConnected(false)
+        setError("Connection test failed. Please refresh the page.")
       }
+    }
+    
+    try {
+      const stats = await fetchDetectionStats()
+      const totalDetections = stats.totalDetections
+      const incorrectDisposals = stats.incorrectDisposals
+      const correctDisposals = stats.correctDisposals
+      
+      // Calculate accuracy
+      const accuracy = totalDetections > 0
+        ? ((correctDisposals / totalDetections) * 100).toFixed(1)
+        : "0.0"
+      
+      setStats({
+        totalDetections,
+        incorrectDisposals,
+        detectionAccuracy: parseFloat(accuracy),
+        wasteTypes: stats.wasteTypes || {},
+      })
+      
+      setLastUpdated(new Date())
     } catch (error) {
-      console.error('Error loading dashboard data:', error)
+      console.error("Failed to load data:", error)
+      setError("Failed to load data. Please try again.")
     } finally {
+      // Set loading to false even if there was an error
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    console.log("Dashboard component mounted - fetching data from Supabase...")
-    loadData()
-    
-    // Subscribe to real-time updates
-    console.log("Setting up Supabase real-time subscription...")
-    const unsubscribe = subscribeToDetections((payload) => {
-      console.log("New detection received on dashboard:", payload)
+    try {
+      loadData()
       
-      setStats(prevStats => {
-        const wasteType = payload.new.waste_type
-        const isCorrect = payload.new.is_correct
-        
-        // Update waste types
-        const wasteTypes = { ...prevStats.wasteTypes }
-        if (wasteTypes[wasteType]) {
-          wasteTypes[wasteType]++
-        } else {
-          wasteTypes[wasteType] = 1
-        }
-        
-        // Update counts
-        const totalDetections = prevStats.totalDetections + 1
-        const incorrectDisposals = prevStats.incorrectDisposals + (isCorrect ? 0 : 1)
-        const correctDisposals = totalDetections - incorrectDisposals
-        
-        // Calculate new accuracy
-        const accuracy = ((correctDisposals / totalDetections) * 100).toFixed(1)
-        
-        setLastUpdated(new Date())
-        
-        return {
-          totalDetections,
-          incorrectDisposals,
-          detectionAccuracy: parseFloat(accuracy),
-          wasteTypes
-        }
-      })
-    })
-    
-    // Cleanup subscription on unmount
-    return () => {
-      unsubscribe()
+      // Only set up subscription if we have a connection
+      let unsubscribe: (() => void) | null = null
+      
+      if (isConnected) {
+        // Subscribe to real-time updates
+        unsubscribe = subscribeToDetections((payload) => {
+          const wasteType = payload.new.waste_type
+          const isCorrect = payload.new.is_correct
+          
+          setStats(prevStats => {
+            // Update waste types
+            const wasteTypes = { ...prevStats.wasteTypes }
+            if (wasteTypes[wasteType]) {
+              wasteTypes[wasteType]++
+            } else {
+              wasteTypes[wasteType] = 1
+            }
+            
+            // Update counts
+            const totalDetections = prevStats.totalDetections + 1
+            const incorrectDisposals = prevStats.incorrectDisposals + (isCorrect ? 0 : 1)
+            const correctDisposals = totalDetections - incorrectDisposals
+            
+            // Calculate new accuracy
+            const accuracy = ((correctDisposals / totalDetections) * 100).toFixed(1)
+            
+            setLastUpdated(new Date())
+            
+            return {
+              totalDetections,
+              incorrectDisposals,
+              detectionAccuracy: parseFloat(accuracy),
+              wasteTypes
+            }
+          })
+        })
+      }
+      
+      // Cleanup subscription on unmount
+      return () => {
+        if (unsubscribe) unsubscribe()
+      }
+    } catch (err) {
+      console.error("Unexpected error in useEffect:", err)
+      setError("An unexpected error occurred. Please refresh the page.")
+      setIsLoading(false)
+      setIsConnecting(false)
     }
-  }, [])
+  }, [isConnected])
 
   const handleRefresh = () => {
+    setError(null)
     loadData()
   }
 
-  const handleDebug = async () => {
-    console.log("Running Supabase debug...")
-    await debugSupabaseData()
-    console.log("Debug complete - check console for details")
-    
-    // If we have no data, seed some sample data and refresh
-    if (stats.totalDetections === 0) {
-      const seeded = await seedSampleData()
-      if (seeded) {
-        loadData()
-      }
-    }
+  // Display error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="mb-4 text-red-500">
+          <AlertTriangle size={32} />
+        </div>
+        <h2 className="text-xl font-semibold mb-2">Error</h2>
+        <p className="text-muted-foreground mb-4">{error}</p>
+        <Button onClick={handleRefresh}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Retry
+        </Button>
+      </div>
+    )
   }
 
-  const formatTimeAgo = (date: Date | null) => {
-    if (!date) return ""
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-    if (seconds < 60) return `${seconds} seconds ago`
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-    const hours = Math.floor(minutes / 60)
-    return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+  // Display different states based on connection and loading
+  if (isConnecting) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="animate-spin mb-4">
+          <RefreshCw size={28} />
+        </div>
+        <h2 className="text-xl font-semibold mb-2">Connecting to database...</h2>
+        <p className="text-muted-foreground">This should only take a moment</p>
+      </div>
+    )
   }
-
-  const getWasteTypeColor = (name: string): string => {
-    const typeColors: Record<string, string> = {
-      'paper': '#4CAF50',
-      'cardboard': '#3B82F6',
-      'glass': '#9C27B0',
-      'metal': '#F59E0B',
-      'other': '#8b5cf6',
-      'plastic': '#ef4444'
-    };
-    
-    return typeColors[name.toLowerCase()] || '#6b7280';
-  };
+  
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="mb-4 text-amber-500">
+          <AlertTriangle size={32} />
+        </div>
+        <h2 className="text-xl font-semibold mb-2">Database connection issue</h2>
+        <p className="text-muted-foreground mb-4">Could not connect to Supabase</p>
+        <div className="flex gap-3">
+          <Button onClick={handleRefresh}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry connection
+          </Button>
+          <Button variant="outline" onClick={() => seedSampleData()}>
+            <Bug className="mr-2 h-4 w-4" />
+            Generate test data
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-6 border-b">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
+        <div className="flex items-center space-x-2">
           {lastUpdated && (
             <p className="text-sm text-muted-foreground">
-              Last updated: {formatTimeAgo(lastUpdated)}
+              Last updated: {lastUpdated.toLocaleTimeString()}
             </p>
           )}
-        </div>
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" className="gap-1" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-            <span className="hidden sm:inline">Refresh Data</span>
+          <Button onClick={handleRefresh} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </>
+            )}
           </Button>
-          <Button variant="outline" size="sm" className="gap-1" onClick={handleDebug}>
-            <Bug className="h-4 w-4" />
-            <span className="hidden sm:inline">Debug Data</span>
-          </Button>
-          <Link href="/detection">
-            <Button className="gap-2 bg-[#8cb9a3] hover:bg-[#7aa08a]">
-              <span>Go to Live Detection</span>
-              <ArrowUpRight className="h-4 w-4" />
-            </Button>
-          </Link>
         </div>
       </div>
 
-      <div className="flex-1 p-6 space-y-6 overflow-auto">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-32">
-            <Loader2 className="h-8 w-8 animate-spin mr-2" />
-            <span>Loading dashboard data...</span>
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Total Detections</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{stats.totalDetections}</div>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    {stats.totalDetections > 0 
-                      ? (
-                        <>
-                          <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-                          <span>Live data from Supabase</span>
-                        </>
-                      ) 
-                      : 'No detections yet'}
-                  </p>
-                  <div className="mt-4 flex items-center text-sm text-muted-foreground">
-                    <Trash2 className="mr-1 h-4 w-4" />
-                    <span>Across all waste categories</span>
-                  </div>
-                </CardContent>
-              </Card>
+      {isLoading ? (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-4 bg-muted rounded w-24"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-muted rounded w-16 mb-2"></div>
+                <div className="h-3 bg-muted rounded w-32"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Detections
+              </CardTitle>
+              <Zap className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalDetections.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                Items analyzed by AI model
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Disposal Accuracy
+              </CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.detectionAccuracy}%</div>
+              <p className="text-xs text-muted-foreground">
+                Items correctly disposed
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Incorrect Disposals
+              </CardTitle>
+              <XCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.incorrectDisposals.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                Items in wrong bins
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Most Common Type
+              </CardTitle>
+              <CircleOff className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold capitalize">
+                {Object.entries(stats.wasteTypes).sort((a, b) => b[1] - a[1])[0]?.[0] || "None"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Highest volume waste category
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Incorrect Disposals</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{stats.incorrectDisposals}</div>
-                  <p className="text-xs text-red-600">
-                    {stats.totalDetections > 0 
-                      ? `${((stats.incorrectDisposals / stats.totalDetections) * 100).toFixed(1)}% of total`
-                      : 'No data yet'}
-                  </p>
-                  <div className="mt-4 flex items-center text-sm text-muted-foreground">
-                    <AlertTriangle className="mr-1 h-4 w-4" />
-                    <span>Requires attention</span>
+      {!isLoading && (
+        <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Waste Type Distribution</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px] overflow-hidden">
+              {Object.keys(stats.wasteTypes).length > 0 ? (
+                <div className="h-full flex flex-col">
+                  <div className="flex justify-end mb-2 flex-shrink-0">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        console.log("[Dashboard] Toggling chart mode:", chartMode === 'bar' ? 'donut' : 'bar');
+                        setChartMode(chartMode === 'bar' ? 'donut' : 'bar');
+                      }}
+                    >
+                      {chartMode === 'bar' ? 'Show as Donut' : 'Show as Bar Chart'}
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Detection Accuracy</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{stats.detectionAccuracy}%</div>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    {stats.totalDetections > 0 
-                      ? (
-                        <>
-                          <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-                          <span>Based on correct/incorrect ratio</span>
-                        </>
-                      ) 
-                      : 'No detections yet'}
-                  </p>
-                  <div className="mt-4 flex items-center text-sm text-muted-foreground">
-                    <CheckCircle className="mr-1 h-4 w-4" />
-                    <span>YOLOv11 model performance</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="md:col-span-1">
-                <CardHeader>
-                  <div>
-                    <CardTitle>Waste Distribution</CardTitle>
-                    <CardDescription>Breakdown by material type</CardDescription>
-                  </div>
-                  {stats.totalDetections > 0 && (
-                    <Badge className="bg-green-100 text-green-800">
-                      <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-                        <span>Live Data</span>
-                      </span>
-                    </Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="p-4">
-                  <div className="w-full" style={{ height: "350px", overflow: "visible" }}>
+                  <div className="flex-1 min-h-0 overflow-hidden" style={{ height: 'calc(100% - 40px)' }}>
                     <WasteDistributionChart 
-                      data={Object.entries(stats.wasteTypes).map(([name, value]) => ({
-                        name: name.charAt(0).toUpperCase() + name.slice(1),
-                        value,
-                        color: getWasteTypeColor(name)
-                      }))}
-                      showHistorical={false}
+                      data={Object.entries(stats.wasteTypes).map(([name, value]) => {
+                        console.log(`[Dashboard] Data point: ${name} = ${value}`);
+                        return {
+                          name: name.charAt(0).toUpperCase() + name.slice(1),
+                          value
+                        };
+                      })}
+                      chartMode={chartMode}
+                      compactMode={true}
                     />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="md:col-span-1">
-                <CardHeader>
-                  <CardTitle>Detection Status</CardTitle>
-                  <CardDescription>System performance</CardDescription>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <div className="w-full" style={{ height: "350px", overflow: "visible" }}>
-                    <DetectionStatus />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
-      </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No waste type data available</p>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="h-80 flex items-center justify-center">
+              <Link href="/detection" className="w-full">
+                <Button className="w-full">
+                  Go to Live Detection
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

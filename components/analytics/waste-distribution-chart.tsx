@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { historicalData } from "@/lib/mockData"
 import { Badge } from "@/components/ui/badge"
@@ -28,21 +28,31 @@ interface WasteDistributionChartProps {
   title?: string
   description?: string
   showHistorical?: boolean
+  compactMode?: boolean
+  chartMode?: 'bar' | 'donut'
 }
 
 export function WasteDistributionChart({
   data,
   title = "Waste Distribution",
   description = "Distribution of waste by category",
-  showHistorical = false
+  showHistorical = false,
+  compactMode = false,
+  chartMode: externalChartMode
 }: WasteDistributionChartProps) {
   const [chartData, setChartData] = useState<any[]>([])
-  const [chartMode, setChartMode] = useState<'donut' | 'bar'>('bar')
+  const [internalChartMode, setInternalChartMode] = useState<'donut' | 'bar'>('bar')
   const [historicalYear, setHistoricalYear] = useState<number>(2015)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [dbHistoricalData, setDbHistoricalData] = useState<any[] | null>(null)
   const { resolvedTheme } = useTheme()
   const isDarkMode = resolvedTheme === 'dark'
+  
+  // If empty title and description are provided, assume we want compact mode
+  const isCompact = compactMode || (title === "" && description === "")
+  
+  // Use external chart mode if provided, otherwise use the internal state
+  const chartMode = externalChartMode || internalChartMode
   
   // Colors for chart segments - matching the screenshot
   const lightModeColors = [
@@ -51,7 +61,7 @@ export function WasteDistributionChart({
     "#9C27B0", // Purple (Glass)
     "#F59E0B", // Amber (Metal)
     "#8b5cf6", // Purple (other)
-    "#6b7280"  // Gray (other)
+    "#ef4444"  // Red (Plastic)
   ]
 
   const darkModeColors = [
@@ -60,7 +70,7 @@ export function WasteDistributionChart({
     "rgba(156, 39, 176, 0.8)",   // Purple (Glass)
     "rgba(245, 158, 11, 0.8)",   // Amber (Metal)
     "rgba(139, 92, 246, 0.8)",   // Purple (other)
-    "rgba(107, 114, 128, 0.8)"   // Gray (other)
+    "rgba(239, 68, 68, 0.8)"     // Red (Plastic)
   ]
 
   // Choose color set based on theme
@@ -127,32 +137,27 @@ export function WasteDistributionChart({
       }
     } else if (data && data.length > 0) {
       // Use real-time data if provided - add colors directly to data items
+      console.log("Using provided data for chart:", data);
       const dataWithColors = data.map((item: any) => ({
         ...item,
         color: getColorForCategory(item.name)
       }));
       setChartData(dataWithColors);
     } else {
-      // Mock data with colors for demonstration
-      if (chartMode === 'bar') {
-        setChartData([
-          { name: 'Paper', value: 35, color: '#4CAF50' },
-          { name: 'Cardboard', value: 45, color: '#3B82F6' },
-          { name: 'Glass', value: 15, color: '#9C27B0' },
-          { name: 'Metal', value: 30, color: '#F59E0B' },
-          { name: 'Other', value: 10, color: '#8b5cf6' },
-          { name: 'Plastic', value: 25, color: '#ef4444' },
-        ]);
-      } else {
-        setChartData([
-          { name: 'Paper', value: 35, color: '#4CAF50' },
-          { name: 'Cardboard', value: 45, color: '#3B82F6' },
-          { name: 'Glass', value: 15, color: '#9C27B0' },
-          { name: 'Metal', value: 30, color: '#F59E0B' },
-          { name: 'Other', value: 10, color: '#8b5cf6' },
-          { name: 'Plastic', value: 25, color: '#ef4444' },
-        ]);
-      }
+      // Fallback data with colors for demonstration when no data is available
+      console.log("No data provided, using fallback data");
+      
+      // Create a set of demo data that will always render properly
+      const fallbackData = [
+        { name: 'Paper', value: 127, color: '#4CAF50' },
+        { name: 'Cardboard', value: 146, color: '#3B82F6' },
+        { name: 'Glass', value: 109, color: '#9C27B0' },
+        { name: 'Metal', value: 120, color: '#F59E0B' },
+        { name: 'Other', value: 263, color: '#8b5cf6' },
+        { name: 'Plastic', value: 235, color: '#ef4444' },
+      ];
+      
+      setChartData(fallbackData);
     }
   }, [data, chartMode, showHistorical, historicalYear, dbHistoricalData]);
   
@@ -161,7 +166,7 @@ export function WasteDistributionChart({
   };
   
   const toggleChartMode = () => {
-    setChartMode(chartMode === 'bar' ? 'donut' : 'bar');
+    setInternalChartMode(internalChartMode === 'bar' ? 'donut' : 'bar');
   };
   
   const toggleHistoricalYear = () => {
@@ -204,7 +209,148 @@ export function WasteDistributionChart({
     console.log('Chart data:', chartData);
   }, [chartData]);
 
-  return (
+  const chartRef = useRef<HTMLDivElement>(null)
+  
+  // Debug chart dimensions
+  useEffect(() => {
+    if (chartRef.current && isCompact) {
+      console.log("[WasteDistributionChart] Container dimensions:", {
+        height: chartRef.current.offsetHeight,
+        width: chartRef.current.offsetWidth,
+        clientHeight: chartRef.current.clientHeight,
+        scrollHeight: chartRef.current.scrollHeight,
+        parent: chartRef.current.parentElement ? {
+          height: chartRef.current.parentElement.offsetHeight,
+          clientHeight: chartRef.current.parentElement.clientHeight,
+          scrollHeight: chartRef.current.parentElement.scrollHeight,
+        } : null
+      })
+    }
+  }, [chartData, isCompact, chartMode])
+
+  // Observer to detect chart size changes
+  useEffect(() => {
+    if (!chartRef.current || !isCompact) return
+
+    const resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        console.log("[WasteDistributionChart] Chart resized:", {
+          height: entry.contentRect.height,
+          width: entry.contentRect.width,
+          time: new Date().toISOString()
+        })
+      }
+    })
+
+    resizeObserver.observe(chartRef.current)
+    
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [isCompact])
+
+  // Track chart rendering completion
+  useEffect(() => {
+    // Wait for the chart to be fully rendered
+    const checkForCompletion = () => {
+      if (chartRef.current) {
+        const svgElements = chartRef.current.querySelectorAll('svg')
+        if (svgElements.length > 0) {
+          console.log('[WasteDistributionChart] Chart rendering complete. SVG elements found:', svgElements.length)
+          // Log heights for debugging
+          svgElements.forEach((svg, i) => {
+            console.log(`[WasteDistributionChart] SVG ${i} dimensions:`, {
+              height: svg.getBoundingClientRect().height,
+              width: svg.getBoundingClientRect().width,
+              viewBox: svg.getAttribute('viewBox'),
+              overflow: window.getComputedStyle(svg).overflow
+            })
+          })
+        } else {
+          // Check again in a moment
+          setTimeout(checkForCompletion, 100)
+        }
+      }
+    }
+    
+    checkForCompletion()
+  }, [chartData, chartMode, isCompact])
+
+  return isCompact ? (
+    // Compact version for dashboard
+    <div 
+      ref={chartRef} 
+      className="h-full w-full tremor-chart-wrapper overflow-hidden flex flex-col"
+      style={{ maxHeight: '100%' }}
+    >
+      {isLoading ? (
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Loading data...</span>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0">
+          {chartMode === 'bar' ? (
+            <div style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
+              <BarChart
+                data={chartData}
+                index="name"
+                categories={["value"]}
+                colors={chartColors}
+                valueFormatter={valueFormatter}
+                yAxisWidth={48}
+                showAnimation={true}
+                showLegend={false}
+                customTooltip={(props) => {
+                  const { payload, active } = props;
+                  if (!active || !payload) return null;
+                  
+                  const categoryItem = payload[0];
+                  if (!categoryItem) return null;
+                  
+                  const itemName = String(categoryItem.name || '');
+                  const itemValue = typeof categoryItem.value === 'number' ? categoryItem.value : 0;
+                  
+                  return (
+                    <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-md">
+                      <div className="flex items-center gap-2">
+                        <span className="h-3 w-3 rounded-full" style={{ 
+                          backgroundColor: getColorForCategory(itemName) 
+                        }}></span>
+                        <span className="font-medium">{itemName}</span>
+                      </div>
+                      <div className="mt-1 text-tremor-default text-gray-700">
+                        {valueFormatter(itemValue)}
+                      </div>
+                    </div>
+                  );
+                }}
+                className="h-full w-full"
+              />
+            </div>
+          ) : (
+            <div style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
+              <DonutChart
+                data={chartData}
+                category="value"
+                index="name"
+                valueFormatter={valueFormatter}
+                colors={chartColors}
+                showAnimation={true}
+                className="h-full w-full"
+                variant="pie"
+              />
+            </div>
+          )}
+        </div>
+      )}
+      <div className="mt-2 text-xs text-right text-green-600 flex items-center justify-end gap-1 flex-shrink-0">
+        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+        <span>Live Data</span>
+      </div>
+    </div>
+  ) : (
+    // Full version for analytics page
     <Card className="w-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
@@ -242,7 +388,7 @@ export function WasteDistributionChart({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full" style={{ minHeight: "300px", position: "relative" }}>
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -251,55 +397,57 @@ export function WasteDistributionChart({
           ) : (
             <>
               {chartMode === 'bar' ? (
-                <BarChart
-                  data={chartData}
-                  index={showHistorical ? "month" : "name"}
-                  categories={showHistorical ? ["Recyclable", "Non-Recyclable"] : ["value"]}
-                  colors={chartColors}
-                  valueFormatter={valueFormatter}
-                  yAxisWidth={48}
-                  showAnimation={true}
-                  showLegend={true}
-                  customTooltip={(props) => {
-                    const { payload, active } = props;
-                    if (!active || !payload) return null;
-                    
-                    const categoryItem = payload[0];
-                    if (!categoryItem) return null;
-                    
-                    const itemName = String(categoryItem.name || '');
-                    const itemValue = typeof categoryItem.value === 'number' ? categoryItem.value : 0;
-                    
-                    return (
-                      <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-md">
-                        <div className="flex items-center gap-2">
-                          <span className="h-3 w-3 rounded-full" style={{ 
-                            backgroundColor: getColorForCategory(itemName) 
-                          }}></span>
-                          <span className="font-medium">{itemName}</span>
+                <div style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}>
+                  <BarChart
+                    data={chartData}
+                    index={showHistorical ? "month" : "name"}
+                    categories={showHistorical ? ["Recyclable", "Non-Recyclable"] : ["value"]}
+                    colors={chartColors}
+                    valueFormatter={valueFormatter}
+                    yAxisWidth={48}
+                    showAnimation={true}
+                    showLegend={true}
+                    customTooltip={(props) => {
+                      const { payload, active } = props;
+                      if (!active || !payload) return null;
+                      
+                      const categoryItem = payload[0];
+                      if (!categoryItem) return null;
+                      
+                      const itemName = String(categoryItem.name || '');
+                      const itemValue = typeof categoryItem.value === 'number' ? categoryItem.value : 0;
+                      
+                      return (
+                        <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-md">
+                          <div className="flex items-center gap-2">
+                            <span className="h-3 w-3 rounded-full" style={{ 
+                              backgroundColor: getColorForCategory(itemName) 
+                            }}></span>
+                            <span className="font-medium">{itemName}</span>
+                          </div>
+                          <div className="mt-1 text-tremor-default text-gray-700">
+                            {valueFormatter(itemValue)}
+                          </div>
                         </div>
-                        <div className="mt-1 text-tremor-default text-gray-700">
-                          {valueFormatter(itemValue)}
-                        </div>
-                      </div>
-                    );
-                  }}
-                  onValueChange={(v) => console.log(v)}
-                  className={`h-full ${isDarkMode ? 'tremor-dark' : ''}`}
-                />
+                      );
+                    }}
+                    className="h-full w-full"
+                  />
+                </div>
               ) : (
-                <DonutChart
-                  data={chartData}
-                  category="value"
-                  index="name"
-                  valueFormatter={valueFormatter}
-                  colors={chartColors}
-                  showAnimation={true}
-                  className={`mt-6 h-full ${isDarkMode ? 'tremor-dark' : ''}`}
-                  label="Total Waste"
-                  variant="pie"
-                  onValueChange={(v) => console.log(v)}
-                />
+                <div style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}>
+                  <DonutChart
+                    data={chartData}
+                    category="value"
+                    index="name"
+                    valueFormatter={valueFormatter}
+                    colors={chartColors}
+                    showAnimation={true}
+                    className="h-full w-full"
+                    label="Total Waste"
+                    variant="pie"
+                  />
+                </div>
               )}
             </>
           )}

@@ -4,45 +4,38 @@ import * as React from "react"
 import { useTheme } from "next-themes"
 
 export function TremorProvider({ children }: { children: React.ReactNode }) {
-  const { theme, resolvedTheme, systemTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
   
-  // Add a class to the html element for Tremor dark mode
+  // Simplified theme monitoring for Tremor charts
   React.useEffect(() => {
-    const root = window.document.documentElement
-    const isDark = theme === 'dark' || resolvedTheme === 'dark'
+    // Basic logging for debugging
+    console.log("[TremorProvider] Current theme:", resolvedTheme)
     
-    console.log("[TremorProvider] Current theme state:", { 
-      theme, 
-      resolvedTheme, 
-      systemTheme, 
-      isDark 
-    })
-    
-    // Force add/remove dark class based on the resolved theme
-    if (isDark) {
-      console.log("[TremorProvider] Enabling dark mode for Tremor")
-      root.classList.add('dark')
-      // Add data attribute for backup
-      root.setAttribute('data-theme', 'dark')
-    } else {
-      console.log("[TremorProvider] Disabling dark mode for Tremor")
-      root.classList.remove('dark')
-      // Add data attribute for backup
-      root.setAttribute('data-theme', 'light')
+    // We don't need to manually add/remove classes as next-themes handles this
+    // Just ensure any Tremor components that need forced updates get them
+    const refreshTremorComponents = () => {
+      const tremorElements = document.querySelectorAll('[class*="tremor-"]')
+      if (tremorElements.length > 0) {
+        console.log(`[TremorProvider] Refreshing ${tremorElements.length} Tremor components`)
+        // Force a style recalculation by accessing offsetHeight
+        tremorElements.forEach(el => {
+          // This triggers a reflow without adding/removing classes
+          void (el as HTMLElement).offsetHeight
+        })
+      }
     }
     
-    // Force update any tremor elements
-    const tremorElements = document.querySelectorAll('[class*="tremor-"]')
-    console.log(`[TremorProvider] Found ${tremorElements.length} Tremor elements to update`)
+    // Initial refresh
+    setTimeout(refreshTremorComponents, 100)
     
-    // Apply a small class toggle trick to force a repaint of Tremor elements
-    tremorElements.forEach(el => {
-      el.classList.add('tremor-force-update')
-      setTimeout(() => {
-        el.classList.remove('tremor-force-update')
-      }, 10)
-    })
-  }, [theme, resolvedTheme, systemTheme])
+    // Listen for theme changes
+    window.addEventListener('themechange', refreshTremorComponents)
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('themechange', refreshTremorComponents)
+    }
+  }, [resolvedTheme])
   
   return <>{children}</>
 } 

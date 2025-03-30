@@ -45,9 +45,10 @@ export default function ZonesPage() {
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null)
   const [webcamReady, setWebcamReady] = useState(false)
   const [editedZone, setEditedZone] = useState<Partial<DetectionZone>>({})
-  const [cameraDimensions, setCameraDimensions] = useState({ width: 1280, height: 720 })
+  const [cameraDimensions, setCameraDimensions] = useState({ width: 640, height: 480 })
   const [saved, setSaved] = useState(false)
   const [showPlaceholder, setShowPlaceholder] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Update edited zone when active zone changes
   useEffect(() => {
@@ -64,6 +65,42 @@ export default function ZonesPage() {
       setEditedZone({})
     }
   }, [activeZoneId, zones])
+
+  // Set camera dimensions to match container with a delay to improve initial load
+  useEffect(() => {
+    const initialLoad = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+
+    const updateDimensions = () => {
+      if (typeof window !== 'undefined') {
+        // Use a lower resolution initially, then upgrade once everything is loaded
+        setCameraDimensions({
+          width: 640,
+          height: 480
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    
+    // Higher resolution after initial load
+    const upgradeResolution = setTimeout(() => {
+      if (webcamReady) {
+        setCameraDimensions({
+          width: 1280,
+          height: 720
+        });
+      }
+    }, 2000);
+    
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      clearTimeout(initialLoad);
+      clearTimeout(upgradeResolution);
+    };
+  }, [webcamReady]);
 
   // Handle camera error
   const handleCameraError = () => {
@@ -149,7 +186,15 @@ export default function ZonesPage() {
             <CardDescription>Draw detection zones on the camera view</CardDescription>
           </CardHeader>
           <CardContent className="p-0 relative bg-gray-900 min-h-[400px] rounded-b-lg overflow-hidden">
-            {showPlaceholder ? (
+            {isLoading ? (
+              <div className="aspect-video min-h-[400px] bg-gray-900 flex flex-col items-center justify-center text-gray-500 gap-4">
+                <div className="h-8 w-8 border-4 border-t-blue-500 rounded-full animate-spin"></div>
+                <div className="text-center">
+                  <p>Initializing camera...</p>
+                  <p className="text-sm">This may take a few moments</p>
+                </div>
+              </div>
+            ) : showPlaceholder ? (
               <div className="aspect-video min-h-[400px] bg-gray-900 flex flex-col items-center justify-center text-gray-500 gap-4">
                 <Camera className="h-16 w-16 text-gray-700" />
                 <div className="text-center">
@@ -158,7 +203,7 @@ export default function ZonesPage() {
                 </div>
               </div>
             ) : (
-              <div className="relative aspect-video min-h-[400px]">
+              <div className="relative aspect-video min-h-[400px] w-full h-full">
                 <Webcam
                   audio={false}
                   screenshotFormat="image/jpeg"
@@ -167,22 +212,32 @@ export default function ZonesPage() {
                     height: cameraDimensions.height,
                     facingMode: "environment"
                   }}
-                  onUserMedia={() => setWebcamReady(true)}
+                  onUserMedia={() => {
+                    setWebcamReady(true);
+                    setIsLoading(false);
+                  }}
                   onUserMediaError={handleCameraError}
                   className="w-full h-full object-cover"
-                  style={{ opacity: webcamReady ? 1 : 0 }}
+                  style={{ 
+                    opacity: webcamReady ? 1 : 0,
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                  }}
                 />
                 
                 {/* Overlay the zone selector on top of the webcam */}
-                <EnhancedZoneSelector
-                  zones={zones}
-                  activeZoneId={activeZoneId}
-                  imageWidth={cameraDimensions.width}
-                  imageHeight={cameraDimensions.height}
-                  onZoneChange={setZones}
-                  onActiveZoneChange={setActiveZoneId}
-                  className="absolute top-0 left-0 w-full h-full"
-                />
+                {webcamReady && (
+                  <EnhancedZoneSelector
+                    zones={zones}
+                    activeZoneId={activeZoneId}
+                    imageWidth={cameraDimensions.width}
+                    imageHeight={cameraDimensions.height}
+                    onZoneChange={setZones}
+                    onActiveZoneChange={setActiveZoneId}
+                    className="absolute top-0 left-0 w-full h-full"
+                  />
+                )}
               </div>
             )}
           </CardContent>
